@@ -12,7 +12,7 @@ from pydantic_ai.retries import RetryConfig
 
 from multimodal_moderation.agents.video_agent import moderate_video
 from multimodal_moderation.types.model_choice import ModelChoice
-from multimodal_moderation.types.moderation_result import VideoModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_evaluators import HasRationale
@@ -29,14 +29,14 @@ class VideoInput(BaseModel):
     video_file: str = Field(description="Path to video file to moderate")
 
 
-async def run_video_moderation(inputs: List[VideoInput]) -> VideoModerationResult:
+async def run_video_moderation(inputs: List[VideoInput]) -> ModerationResult:
     assert len(inputs) == 1
     video_bytes = Path(inputs[0].video_file).read_bytes()
     model_choice = get_model_under_test()
     return await moderate_video(model_choice, video_bytes, media_type="video/mp4")
 
 
-cases: List[Case[List[VideoInput], VideoModerationResult, Any]] = [
+cases: List[Case[List[VideoInput], ModerationResult, Any]] = [
     Case(
         name="professional_video",
         inputs=[VideoInput(video_file=get_test_data_path("professional_video.mp4"))],
@@ -74,10 +74,10 @@ cases: List[Case[List[VideoInput], VideoModerationResult, Any]] = [
 ]
 
 
-video_dataset = Dataset[List[VideoInput], VideoModerationResult, Any](
+video_dataset = Dataset[List[VideoInput], ModerationResult, Any](
     cases=create_repeated_cases(cases),
     evaluators=[
-        IsInstance(type_name="VideoModerationResult"),
+        IsInstance(type_name="ModerationResult"),
         HasRationale(),
     ],
 )

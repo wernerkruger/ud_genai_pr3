@@ -28,7 +28,7 @@ import tenacity
 from pydantic_ai.retries import RetryConfig
 
 from multimodal_moderation.agents.text_agent import moderate_text
-from multimodal_moderation.types.moderation_result import TextModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_evaluators import HasRationale
@@ -48,7 +48,7 @@ class TextInput(BaseModel):
     text_file: str = Field(description="Path to text file to moderate")
 
 
-async def run_text_moderation(inputs: List[TextInput]) -> TextModerationResult:
+async def run_text_moderation(inputs: List[TextInput]) -> ModerationResult:
     """
     Run the text moderation agent on a test input.
 
@@ -59,7 +59,7 @@ async def run_text_moderation(inputs: List[TextInput]) -> TextModerationResult:
         inputs: List with one TextInput containing path to test file
 
     Returns:
-        TextModerationResult from the moderation agent
+        ModerationResult from the moderation agent
     """
     assert len(inputs) == 1, "Text moderation expects exactly one input"
     text = Path(inputs[0].text_file).read_text()
@@ -75,7 +75,7 @@ async def run_text_moderation(inputs: List[TextInput]) -> TextModerationResult:
 # - evaluators: How to check if the output is correct
 #   - TextModerationCheck: Checks boolean flags match expected values
 #   - LLMJudge: Uses an LLM to evaluate if the rationale is good
-cases: List[Case[List[TextInput], TextModerationResult, Any]] = [
+cases: List[Case[List[TextInput], ModerationResult, Any]] = [
     Case(
         name="professional_text",
         inputs=[TextInput(text_file=get_test_data_path("professional_text.txt"))],
@@ -131,11 +131,11 @@ cases: List[Case[List[TextInput], TextModerationResult, Any]] = [
 
 
 # Create the dataset with all test cases
-text_dataset = Dataset[List[TextInput], TextModerationResult, Any](
+text_dataset = Dataset[List[TextInput], ModerationResult, Any](
     cases=create_repeated_cases(cases),
     evaluators=[
         # Global evaluators that apply to all test cases
-        IsInstance(type_name="TextModerationResult"),  # Check correct return type
+        IsInstance(type_name="ModerationResult"),  # Check correct return type
         HasRationale(),  # Check that rationale is not empty
     ],
 )

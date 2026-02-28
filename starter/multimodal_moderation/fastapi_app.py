@@ -4,12 +4,7 @@ from pydantic import BaseModel
 
 from multimodal_moderation.env import get_default_model_choice, USER_API_KEY
 from multimodal_moderation.utils import detect_file_type
-from multimodal_moderation.types.moderation_result import (
-    TextModerationResult,
-    ImageModerationResult,
-    VideoModerationResult,
-    AudioModerationResult,
-)
+from multimodal_moderation.types.moderation_result import ModerationResult
 from multimodal_moderation.agents.text_agent import moderate_text
 from multimodal_moderation.agents.image_agent import moderate_image
 from multimodal_moderation.agents.video_agent import moderate_video
@@ -40,26 +35,26 @@ app = FastAPI(dependencies=[Depends(validate_api_key)])
 default_model_choice = get_default_model_choice()
 
 
-@app.post("/api/v1/moderate_text", response_model=TextModerationResult)
+@app.post("/api/v1/moderate_text", response_model=ModerationResult)
 async def moderate_text_endpoint(request: TextRequest):
     return await moderate_text(default_model_choice, request.text)
 
 
-@app.post("/api/v1/moderate_image_file", response_model=ImageModerationResult)
+@app.post("/api/v1/moderate_image_file", response_model=ModerationResult)
 async def moderate_image_file_endpoint(file: UploadFile = File(...)):
     file_bytes = await file.read()
     mime_type = detect_file_type(file_bytes, context=file.filename or "image file")
     return await moderate_image(default_model_choice, file_bytes, mime_type)
 
 
-@app.post("/api/v1/moderate_video_file", response_model=VideoModerationResult)
+@app.post("/api/v1/moderate_video_file", response_model=ModerationResult)
 async def moderate_video_file_endpoint(file: UploadFile = File(...)):
     file_bytes = await file.read()
     mime_type = detect_file_type(file_bytes, context=file.filename or "video file")
     return await moderate_video(default_model_choice, file_bytes, mime_type)
 
 
-@app.post("/api/v1/moderate_audio_file", response_model=AudioModerationResult)
+@app.post("/api/v1/moderate_audio_file", response_model=ModerationResult)
 async def moderate_audio_file_endpoint(file: UploadFile = File(...)):
     file_bytes = await file.read()
     mime_type = detect_file_type(file_bytes, context=file.filename or "audio file")

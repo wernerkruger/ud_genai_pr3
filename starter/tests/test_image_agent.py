@@ -15,7 +15,7 @@ from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
 from multimodal_moderation.agents.image_agent import moderate_image, image_moderation_agent
-from multimodal_moderation.types.moderation_result import ImageModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 from multimodal_moderation.env import get_default_model_choice
 
 # Block accidental real API calls - all tests should use TestModel
@@ -47,8 +47,8 @@ async def test_moderate_image_returns_image_moderation_result():
     with image_moderation_agent.override(model=TestModel()):
         result = await moderate_image(model, image_bytes, media_type="image/jpeg")
 
-    assert isinstance(result, ImageModerationResult), \
-        f"moderate_image should return ImageModerationResult, got {type(result)}"
+    assert isinstance(result, ModerationResult), \
+        f"moderate_image should return ModerationResult, got {type(result)}"
 
 
 async def test_moderate_image_has_required_fields():

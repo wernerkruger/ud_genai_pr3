@@ -17,7 +17,7 @@ from multimodal_moderation.agents.text_agent import (
     moderate_text,
     text_moderation_agent,
 )
-from multimodal_moderation.types.moderation_result import TextModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 from multimodal_moderation.env import get_default_model_choice
 
 # Block accidental real API calls - all tests should use TestModel
@@ -42,8 +42,8 @@ async def test_moderate_text_returns_text_moderation_result():
     with text_moderation_agent.override(model=TestModel()):
         result = await moderate_text(model, test_text)
 
-    assert isinstance(result, TextModerationResult), \
-        f"moderate_text should return TextModerationResult, got {type(result)}"
+    assert isinstance(result, ModerationResult), \
+        f"moderate_text should return ModerationResult, got {type(result)}"
 
 
 async def test_moderate_text_has_required_fields():

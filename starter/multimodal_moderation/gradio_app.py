@@ -256,12 +256,12 @@ class ChatSessionWithTracing:
                     is_safe, safety_message, mime_type = check_content_safety(text=value)
 
                     if not is_safe:
-                        # Content flagged - block and return error
+                        # Content flagged - block and return error (do not display user message in UI)
                         feedback = f"⚠️ Content flagged: {safety_message}"
                         response = "[This content was flagged by moderation and not sent to the AI. Please try again.]"
-
-                        span.set_attribute("feedback", feedback)
-
+                        with tracer.start_as_current_span("feedback"):
+                            feedback_span = trace.get_current_span()
+                            feedback_span.set_attribute("feedback", feedback)
                         return response, past_messages, feedback
 
                     # Content safe - add to prompt
@@ -278,13 +278,14 @@ class ChatSessionWithTracing:
                             is_safe, safety_message, mime_type = check_content_safety(media=file_path)
 
                             if not is_safe:
-                                # Content flagged - block and return error
+                                # Content flagged - block and return error (do not display user message in UI)
                                 feedback = f"⚠️ Content flagged: {safety_message}"
                                 response = (
                                     "[This content was flagged by moderation and not sent to the AI. Please try again.]"
                                 )
-                                span.set_attribute("feedback", feedback)
-
+                                with tracer.start_as_current_span("feedback"):
+                                    feedback_span = trace.get_current_span()
+                                    feedback_span.set_attribute("feedback", feedback)
                                 return response, past_messages, feedback
 
                             # Content safe - read file and add to prompt
@@ -309,6 +310,10 @@ class ChatSessionWithTracing:
                     )
 
                 logger.info(f"Response generated ({len(result.all_messages())} messages in history)")
+                # Record feedback in a dedicated span for observability
+                with tracer.start_as_current_span("feedback"):
+                    feedback_span = trace.get_current_span()
+                    feedback_span.set_attribute("feedback", safety_message or result.output)
                 return result.output, result.all_messages(), safety_message
 
             except Exception as e:
@@ -317,6 +322,67 @@ class ChatSessionWithTracing:
                     f"I'm sorry, but I encountered an error while processing your request. "
                     f"Please try again or contact ACME support if the issue persists."
                 )
+
+    async def handle_submit(
+        self, message: dict | None, chat_messages: List, past_messages: List
+    ) -> Tuple[List, List, str]:
+        """
+        Submit handler: moderate first; only add user message to chat when safe.
+        Prevents flagged content from being displayed in the UI.
+        """
+        with tracer.start_as_current_span(
+            "chat_turn",
+            context=trace.set_span_in_context(self.conversation_span),
+        ):
+            if not message or (not message.get("text") and not message.get("files")):
+                return chat_messages, past_messages, "Please enter a message or attach a file."
+
+            # Normalize message to dict with text and files for chat_with_gemini
+            if not isinstance(message, dict):
+                message = {"text": str(message) if message else "", "files": []}
+            text = message.get("text", "") or ""
+            raw_files = message.get("files") or []
+            # Normalize: files can be list of paths or list of dicts with "path" key (MultimodalTextbox)
+            files = [f if isinstance(f, str) else (f.get("path") or f) for f in raw_files if f]
+
+            # Moderate all parts before adding anything to the chat (prevents flagged content from displaying)
+            if text:
+                is_safe, safety_message, _ = check_content_safety(text=text)
+                if not is_safe:
+                    feedback = f"⚠️ Content flagged: {safety_message}"
+                    with tracer.start_as_current_span("feedback"):
+                        feedback_span = trace.get_current_span()
+                        feedback_span.set_attribute("feedback", feedback)
+                    return (
+                        chat_messages + [{"role": "assistant", "content": "[This content was flagged by moderation and not sent to the AI. Please try again.]"}],
+                        past_messages,
+                        feedback,
+                    )
+            for file_path in files:
+                try:
+                    is_safe, safety_message, _ = check_content_safety(media=file_path)
+                    if not is_safe:
+                        feedback = f"⚠️ Content flagged: {safety_message}"
+                        with tracer.start_as_current_span("feedback"):
+                            feedback_span = trace.get_current_span()
+                            feedback_span.set_attribute("feedback", feedback)
+                        return (
+                            chat_messages + [{"role": "assistant", "content": "[This content was flagged by moderation and not sent to the AI. Please try again.]"}],
+                            past_messages,
+                            feedback,
+                        )
+                except ValueError as e:
+                    raise gr.Error(str(e))
+
+            # All content safe: add user message to chat and get AI response
+            message_for_agent = {"text": text, "files": files}
+            response, new_past_messages, feedback = await self.chat_with_gemini(message_for_agent, [], past_messages)
+            # Append user message and assistant response so both are displayed
+            new_chat = chat_messages + [
+                {"role": "user", "content": message},
+                {"role": "assistant", "content": response},
+            ]
+            return new_chat, new_past_messages, feedback
 
     def end_conversation(self):
         """
@@ -336,7 +402,7 @@ def create_chat_interface() -> gr.Blocks:
     Create the Gradio chat interface with moderation feedback.
 
     LAYOUT:
-    - Left: Chat interface (ChatInterface with MultimodalTextbox)
+    - Left: Chat interface (Chatbot + MultimodalTextbox + Send); moderated before display so flagged content is never shown
     - Right: Moderation feedback and guidelines sidebar
 
     STATE MANAGEMENT:
@@ -350,15 +416,13 @@ def create_chat_interface() -> gr.Blocks:
         # State to hold Pydantic AI's message history (preserves context across turns)
         past_messages_state = gr.State([])
 
-        # Create feedback_display first (with render=False) so we can reference it
-        # in ChatInterface's additional_outputs below, then render it in the sidebar later
         feedback_display = gr.Textbox(
             label="💬 Moderation Agent Feedback",
             placeholder="No feedback yet",
             interactive=False,
             visible=True,
             lines=10,
-            render=False,  # Don't render yet - will render in sidebar
+            render=False,
         )
 
         # UI Layout
@@ -367,26 +431,29 @@ def create_chat_interface() -> gr.Blocks:
 
         with gr.Row():
             # Left column: Chat interface (75% width)
+            # Custom flow so flagged content is never added to the chat (moderate before display)
             with gr.Column(scale=3):
-                gr.ChatInterface(
-                    fn=chat_session.chat_with_gemini,
-                    type="messages",  # Use newer messages format (supports multimodal)
-                    multimodal=True,
-                    editable=False,  # Don't allow editing past messages
-                    textbox=gr.MultimodalTextbox(
-                        file_count="multiple",  # Allow multiple files
-                        file_types=["image", "video", "audio"],
-                        sources=["upload", "microphone"],  # Allow file upload and recording
-                        placeholder="Type a message, upload files, or record audio...",
-                    ),
-                    chatbot=gr.Chatbot(
-                        show_copy_button=True,
-                        type="messages",  # Use messages format for multimodal support
-                        placeholder="👋 Start by greeting the customer or introducing yourself. The AI customer will respond with their complaint.",
-                        height="75vh",
-                    ),
-                    additional_inputs=[past_messages_state],
-                    additional_outputs=[past_messages_state, feedback_display],
+                chatbot = gr.Chatbot(
+                    show_copy_button=True,
+                    type="messages",
+                    placeholder="👋 Start by greeting the customer or introducing yourself. The AI customer will respond with their complaint.",
+                    height="75vh",
+                    label="Chat",
+                )
+                textbox = gr.MultimodalTextbox(
+                    file_count="multiple",
+                    file_types=["image", "video", "audio"],
+                    sources=["upload", "microphone"],
+                    placeholder="Type a message, upload files, or record audio...",
+                    show_label=False,
+                )
+                submit_btn = gr.Button("Send", variant="primary")
+
+                # Submit: moderate first; only add user message when safe (prevents flagged content from displaying)
+                submit_btn.click(
+                    fn=chat_session.handle_submit,
+                    inputs=[textbox, chatbot, past_messages_state],
+                    outputs=[chatbot, past_messages_state, feedback_display],
                 )
 
             # Right column: Feedback and guidelines (25% width)

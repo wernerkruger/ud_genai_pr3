@@ -11,7 +11,7 @@ import tenacity
 from pydantic_ai.retries import RetryConfig
 
 from multimodal_moderation.agents.image_agent import moderate_image
-from multimodal_moderation.types.moderation_result import ImageModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_evaluators import HasRationale
@@ -30,7 +30,7 @@ class ImageInput(BaseModel):
     image_file: str = Field(description="Path to image file to moderate")
 
 
-async def run_image_moderation(inputs: List[ImageInput]) -> ImageModerationResult:
+async def run_image_moderation(inputs: List[ImageInput]) -> ModerationResult:
     """Run the image moderation agent on a test input."""
     assert len(inputs) == 1, "Image moderation expects exactly one input"
     image_bytes = Path(inputs[0].image_file).read_bytes()
@@ -39,7 +39,7 @@ async def run_image_moderation(inputs: List[ImageInput]) -> ImageModerationResul
     return await moderate_image(model_choice, image_bytes, media_type="image/jpeg")
 
 
-cases: List[Case[List[ImageInput], ImageModerationResult, Any]] = [
+cases: List[Case[List[ImageInput], ModerationResult, Any]] = [
     Case(
         name="professional_image",
         inputs=[ImageInput(image_file=get_test_data_path("professional_image.jpg"))],
@@ -94,10 +94,10 @@ cases: List[Case[List[ImageInput], ImageModerationResult, Any]] = [
 ]
 
 
-image_dataset = Dataset[List[ImageInput], ImageModerationResult, Any](
+image_dataset = Dataset[List[ImageInput], ModerationResult, Any](
     cases=create_repeated_cases(cases),
     evaluators=[
-        IsInstance(type_name="ImageModerationResult"),
+        IsInstance(type_name="ModerationResult"),
         HasRationale(),
     ],
 )

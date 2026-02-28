@@ -12,7 +12,7 @@ from pydantic_ai.retries import RetryConfig
 
 from multimodal_moderation.agents.audio_agent import moderate_audio
 from multimodal_moderation.types.model_choice import ModelChoice
-from multimodal_moderation.types.moderation_result import AudioModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from common_evaluators import HasRationale
@@ -29,14 +29,14 @@ class AudioInput(BaseModel):
     audio_file: str = Field(description="Path to audio file to moderate")
 
 
-async def run_audio_moderation(inputs: List[AudioInput]) -> AudioModerationResult:
+async def run_audio_moderation(inputs: List[AudioInput]) -> ModerationResult:
     assert len(inputs) == 1
     audio_bytes = Path(inputs[0].audio_file).read_bytes()
     model_choice = get_model_under_test()
     return await moderate_audio(model_choice, audio_bytes, media_type="audio/mp3")
 
 
-cases: List[Case[List[AudioInput], AudioModerationResult, Any]] = [
+cases: List[Case[List[AudioInput], ModerationResult, Any]] = [
     Case(
         name="professional_audio",
         inputs=[AudioInput(audio_file=get_test_data_path("professional_audio.mp3"))],
@@ -74,10 +74,10 @@ cases: List[Case[List[AudioInput], AudioModerationResult, Any]] = [
 ]
 
 
-audio_dataset = Dataset[List[AudioInput], AudioModerationResult, Any](
+audio_dataset = Dataset[List[AudioInput], ModerationResult, Any](
     cases=create_repeated_cases(cases),
     evaluators=[
-        IsInstance(type_name="AudioModerationResult"),
+        IsInstance(type_name="ModerationResult"),
         HasRationale(),
         HasTranscription(),
     ],

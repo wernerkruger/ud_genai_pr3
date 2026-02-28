@@ -15,7 +15,7 @@ from pydantic_ai import models
 from pydantic_ai.models.test import TestModel
 
 from multimodal_moderation.agents.video_agent import moderate_video, video_moderation_agent
-from multimodal_moderation.types.moderation_result import VideoModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 from multimodal_moderation.env import get_default_model_choice
 
 # Block accidental real API calls - all tests should use TestModel
@@ -47,8 +47,8 @@ async def test_moderate_video_returns_video_moderation_result():
     with video_moderation_agent.override(model=TestModel()):
         result = await moderate_video(model, video_bytes, media_type="video/mp4")
 
-    assert isinstance(result, VideoModerationResult), \
-        f"moderate_video should return VideoModerationResult, got {type(result)}"
+    assert isinstance(result, ModerationResult), \
+        f"moderate_video should return ModerationResult, got {type(result)}"
 
 
 async def test_moderate_video_has_required_fields():

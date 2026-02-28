@@ -1,7 +1,7 @@
 from pydantic_ai import Agent
 from pydantic_ai.messages import BinaryContent
 from multimodal_moderation.types.model_choice import ModelChoice
-from multimodal_moderation.types.moderation_result import VideoModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 
 MODERATION_INSTRUCTIONS = """
@@ -31,7 +31,7 @@ Provide a detailed rationale for your choices.
 
 video_moderation_agent = Agent(
     instructions=MODERATION_INSTRUCTIONS,
-    output_type=VideoModerationResult,
+    output_type=ModerationResult,
 )
 
 
@@ -39,7 +39,7 @@ async def moderate_video(
     model_choice: ModelChoice,
     video_source: bytes,
     media_type: str
-) -> VideoModerationResult:
+) -> ModerationResult:
 
     video_input = BinaryContent(data=video_source, media_type=media_type)
 

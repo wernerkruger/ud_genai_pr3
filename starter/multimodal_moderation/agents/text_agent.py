@@ -1,6 +1,6 @@
 from pydantic_ai import Agent
 from multimodal_moderation.types.model_choice import ModelChoice
-from multimodal_moderation.types.moderation_result import ModerationResult, TextModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 
 MODERATION_INSTRUCTIONS = """
@@ -32,11 +32,11 @@ Provide a detailed rationale for your choices as well as a confidence score betw
 
 text_moderation_agent = Agent(
     instructions=MODERATION_INSTRUCTIONS,
-    output_type=TextModerationResult,
+    output_type=ModerationResult,
 )
 
 
-async def moderate_text(model_choice: ModelChoice, text: str) -> TextModerationResult:
+async def moderate_text(model_choice: ModelChoice, text: str) -> ModerationResult:
     result = await text_moderation_agent.run(
         text,
         model=model_choice.model,

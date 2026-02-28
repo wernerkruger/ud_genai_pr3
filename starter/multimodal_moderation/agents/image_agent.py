@@ -1,7 +1,7 @@
 from pydantic_ai import Agent
 from pydantic_ai.messages import BinaryContent
 from multimodal_moderation.types.model_choice import ModelChoice
-from multimodal_moderation.types.moderation_result import ImageModerationResult
+from multimodal_moderation.types.moderation_result import ModerationResult
 
 
 MODERATION_INSTRUCTIONS = """
@@ -30,7 +30,7 @@ Provide a detailed rationale for your choices.
 
 image_moderation_agent = Agent(
     instructions=MODERATION_INSTRUCTIONS,
-    output_type=ImageModerationResult,
+    output_type=ModerationResult,
 )
 
 
@@ -38,7 +38,7 @@ async def moderate_image(
     model_choice: ModelChoice,
     image_source: bytes,
     media_type: str
-) -> ImageModerationResult:
+) -> ModerationResult:
     image_input = BinaryContent(data=image_source, media_type=media_type)
 
     result = await image_moderation_agent.run(
